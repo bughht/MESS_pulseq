@@ -78,28 +78,41 @@ class MESS_3D:
 
         self.rf_phase = 0
 
-        pulse_cfg = pp.SigpyPulseOpts(
-            pulse_type='slr',
-            ptype='st',
-            ftype='ls',
-            d1=0.01,
-            d2=0.01,
-            cancel_alpha_phs=True,
-            n_bands=4,
-            band_sep=20,
-            phs_0_pt='None',
-        )
+        # Old Pypulseq < 1.5.1
+        # pulse_cfg = pp.SigpyPulseOpts(
+        #     pulse_type='slr',
+        #     ptype='st',
+        #     ftype='ls',
+        #     d1=0.01,
+        #     d2=0.01,
+        #     cancel_alpha_phs=True,
+        #     n_bands=4,
+        #     band_sep=20,
+        #     phs_0_pt='None',
+        # )
 
-        self.rf, self.gz, self.gzr, _ = sigpy_n_seq(
-            flip_angle=np.deg2rad(self.FA),
+        # self.rf, self.gz, self.gzr, _ = sigpy_n_seq(
+        #     flip_angle=np.deg2rad(self.FA),
+        #     duration=self.rf_duration,
+        #     return_gz=True,
+        #     slice_thickness=self.fov_SPE,
+        #     system=self.system,
+        #     time_bw_product=4,
+        #     # time_bw_product=2,  # High Flip Angle
+        #     pulse_cfg=pulse_cfg,
+        #     plot=False,
+        # )
+
+        # New Pypulseq >= 1.5.1
+        self.rf, self.gz, self.gzr = pp.make_slr_pulse(
+            flip_angle=np.deg2rad(self.FA), 
             duration=self.rf_duration,
-            return_gz=True,
-            slice_thickness=self.fov_SPE*0.5,
+            slice_thickness=self.fov_SPE*0.8,
             system=self.system,
-            # time_bw_product=4,
-            time_bw_product=2,  # High Flip Angle
-            pulse_cfg=pulse_cfg,
-            plot=False,
+            time_bw_product=4,
+            return_gz=True,
+            use='excitation',
+            recenter_on_sample=True
         )
 
         # sinc_rf, self.gz, self.gzr = pp.make_sinc_pulse(
@@ -113,8 +126,8 @@ class MESS_3D:
         #     slice_thickness=self.fov_SPE*0.25, apodization=0.2, time_bw_product=2.7,
         #     system=self.system, use="excitation", return_gz=True)
 
-        self.rf.delay = self.gz.rise_time
-        self.gz.delay = 0
+        # self.rf.delay = self.gz.rise_time
+        # self.gz.delay = 0
         self.gzr_area = self.gzr.area
         # print("gzr_area:{}".format(self.gzr_area),
         #       "gz_area:{}".format(self.gz.area))
@@ -151,10 +164,14 @@ class MESS_3D:
             channel='x', area=-self.ramp_area+self.half_grad_area*c, system=self.system)
         gx_ro = pp.make_trapezoid(channel='x', flat_area=self.half_grad_area*b,
                                   flat_time=self.dwell*self.num_RO*num_echo, system=self.system)
-        adc = pp.make_adc(num_samples=self.num_RO*num_echo, duration=self.dwell *
-                          self.num_RO*num_echo, system=self.system)
+        adc = pp.make_adc(num_samples=self.num_RO*num_echo,
+                          dwell=self.dwell, system=self.system)
         adc.delay = gx_ro.rise_time
-        # print("Delta TE: ", pp.calc_duration(adc))
+        print("Delta TE: ", pp.calc_duration(adc))
+        print("rampup time: ", gx_ro.rise_time)
+        print(pp.calc_duration(adc), self.dwell *
+              self.num_RO*num_echo)
+        print(adc.dwell)
 
         gpe_max = pp.make_trapezoid(channel='y', area=np.abs(
             self.PE).max(), system=self.system)
@@ -174,7 +191,7 @@ class MESS_3D:
                 self.TR, min_TR)
         else:
             self.TR = min_TR
-        # print("min_TR:{}".format(min_TR))
+        print("min_TR:{}".format(min_TR))
         delay_time = (self.TR-min_TR)
         for spe_idx, spe_area in enumerate(self.SPE):
             gspe_pre = pp.make_trapezoid(
@@ -182,6 +199,8 @@ class MESS_3D:
             gspe_rep = pp.make_trapezoid(
                 channel='z', area=-spe_area+self.gzr_area, duration=min_rep_duration, system=self.system)
             for pe_idx, pe_area in enumerate(self.PE):
+                label_pe = pp.make_label('LIN', 'SET', pe_idx)
+                label_spe = pp.make_label('PAR', 'SET', spe_idx)
                 # for pe_idx, pe_area in enumerate(self.PE[:5]):
                 shot_idx = spe_idx*len(self.PE)+pe_idx
                 self.rf.phase_offset = shot_idx*np.deg2rad(phase_cycle)
@@ -192,14 +211,23 @@ class MESS_3D:
                     channel='y', area=-pe_area, duration=min_rep_duration, system=self.system)
 
                 seq.add_block(self.rf, self.gz)
+                # print("RF_duration:{}".format(pp.calc_duration(self.gz)))
                 seq.add_block(
                     *pp.align(right=gx_pre, left=[gpe_pre, gspe_pre]))
+                # print("Pre_PE duration:{}".format(max(pp.calc_duration(
+                #     gpe_pre), pp.calc_duration(gspe_pre), pp.calc_duration(gx_pre))))
                 if delay_pre is not None:
                     seq.add_block(pp.make_delay(delay_pre))
-                seq.add_block(gx_ro, adc)
+                    # print("Pre_delay duration:{}".format(delay_pre))
+                seq.add_block(gx_ro, adc, label_pe, label_spe)
+                # print("RO duration:{}".format(pp.calc_duration(gx_ro)))
+                # print("ADC duration:{}".format(pp.calc_duration(adc)))
                 if delay_post is not None:
                     seq.add_block(pp.make_delay(delay_post))
+                    # print("Post_delay duration:{}".format(delay_post))
                 seq.add_block(
                     *pp.align(left=[gx_rep, pp.make_delay(delay_time+min_rep_duration)], right=[gpe_rep, gspe_rep]))
+                # print("Rep_PE duration:{}".format(max(pp.calc_duration(
+                #     gpe_rep), pp.calc_duration(gspe_rep), pp.calc_duration(gx_rep))))
 
         return seq
