@@ -1,3 +1,19 @@
-__pycache__
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.ipynb_checkpoints/
 
+# editors and logs
+.vscode/
+*.log
+
+# generated sequences and raw data (write them with examples/)
 *.seq
+recon/rawdata
+
+# notebook simulation cache and downloaded phantom
+notebooks/.cache/

@@ -1,2 +1,10 @@
-pypulseq
+# sequence design (the mess package)
 numpy
+pypulseq>=1.4
+
+# notebooks: plots and MR-zero simulations
+matplotlib
+scipy
+MRzeroCore
+torch
+jupyter
