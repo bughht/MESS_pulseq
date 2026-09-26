@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mess-pulseq"
+version = "1.0.0"
+description = "Multi-echo SSFP (MESS) in Pulseq: arbitrary dephasing orders and banding-free synthetic bSSFP"
+readme = "README.md"
+license = { text = "MIT" }
+authors = [{ name = "Haotian Hong" }]
+requires-python = ">=3.9"
+dependencies = ["numpy", "pypulseq>=1.4"]
+
+[project.optional-dependencies]
+plot = ["matplotlib"]
+notebooks = ["matplotlib", "scipy", "MRzeroCore", "torch", "jupyter"]
+test = ["pytest"]
+
+[project.urls]
+Paper = "https://doi.org/10.1002/mrm.70472"
+Source = "https://github.com/bughht/MESS_pulseq"
+
+[tool.setuptools]
+packages = ["mess"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+filterwarnings = ["ignore::UserWarning", "ignore::DeprecationWarning"]
